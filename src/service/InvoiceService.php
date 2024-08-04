@@ -2,9 +2,12 @@
 
 namespace xjryanse\invoice\service;
 
+use xjryanse\order\service\OrderService;
 use app\order\service\OrderBaoBusService;
 use xjryanse\system\interfaces\MainModelInterface;
 use xjryanse\logic\Arrays;
+use xjryanse\logic\Debug;
+use xjryanse\logic\DataCheck;
 use Exception;
 /**
  * 
@@ -13,8 +16,14 @@ class InvoiceService extends Base implements MainModelInterface {
 
     use \xjryanse\traits\InstTrait;
     use \xjryanse\traits\MainModelTrait;
+    use \xjryanse\traits\MainModelRamTrait;
+    use \xjryanse\traits\MainModelCacheTrait;
+    use \xjryanse\traits\MainModelCheckTrait;
+    use \xjryanse\traits\MainModelGroupTrait;
     use \xjryanse\traits\MainModelQueryTrait;
 
+    use \xjryanse\traits\ObjectAttrTrait;
+    
     protected static $mainModel;
     protected static $mainModelClass = '\\xjryanse\\invoice\\model\\Invoice';
     //直接执行后续触发动作
@@ -24,6 +33,8 @@ class InvoiceService extends Base implements MainModelInterface {
         self::stopUse(__METHOD__);
     }
 
+
+    
     public static function extraPreUpdate(&$data, $uuid) {
         self::stopUse(__METHOD__);
     }
@@ -55,6 +66,13 @@ class InvoiceService extends Base implements MainModelInterface {
     }
     
     public static function ramPreSave(&$data, $uuid) {
+        // 20240715:TODO:优化
+        if(session(SESSION_COMPANY_ID) != 4){
+            $keys = ['bil_company'];
+            $notices['bil_company'] = '开票单位必须';
+            DataCheck::must($data, $keys, $notices);
+        }
+        
         if(!$data['orderIdArr']){
             throw new Exception('请选择开票订单明细');
         }
@@ -69,6 +87,18 @@ class InvoiceService extends Base implements MainModelInterface {
             }
             InvoiceOrderService::saveAllRam($orderIdArr);
         }
+        // 20231216
+        if(!Arrays::value($data, 'invoice_time')){
+            $data['invoice_time'] = date('Y-m-d H:i:s');
+        }
+
+        $lists = InvoiceService::getInstance($uuid)->objAttrsList('invoiceOrder');
+        if($lists){
+            $d                  = $lists[0];
+            $orderId            = Arrays::value($d, 'order_id');
+            $data['dept_id']    = OrderService::getInstance($orderId)->fDeptId();
+        }
+        // Debug::dump($lists);
     }
     /**
      * 预先删除
